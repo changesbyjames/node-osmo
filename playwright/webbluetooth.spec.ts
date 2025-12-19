@@ -117,12 +117,18 @@ test('WebDjiDevice runs the start-stream sequence over mocked WebBluetooth', asy
   });
   await page.waitForFunction(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (globalThis as any).__WEB__ !== undefined;
+    const g = globalThis as any;
+    if (g.__WEB_ERROR__) return true;
+    return g.__WEB__ !== undefined;
   });
 
   const result = await page.evaluate(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const web = (globalThis as any).__WEB__;
+    const g = globalThis as any;
+    if (g.__WEB_ERROR__) {
+      throw new Error(g.__WEB_ERROR__);
+    }
+    const web = g.__WEB__;
 
     const {
       DJI_CHAR_FFF3,
@@ -240,7 +246,7 @@ test('WebDjiDevice runs the start-stream sequence over mocked WebBluetooth', asy
     };
   });
 
-  expect(result.state).toBe(8); // DjiDeviceState.streaming
+  expect(result.state).toBe('streaming');
   expect(result.battery).toBe(77);
 });
 
