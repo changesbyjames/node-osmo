@@ -4,6 +4,7 @@ export default {
   transform: {
     '^.+\\.m?[tj]s?$': ['ts-jest', { useESM: true }],
   },
+  testPathIgnorePatterns: ['/node_modules/', '/playwright/'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.(m)?js$': '$1',
   },

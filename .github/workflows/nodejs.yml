@@ -33,3 +33,9 @@ jobs:
         run: pnpm run build
         env:
           CI: true
+
+      - name: Install Playwright (Chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E (Playwright)
+        run: pnpm run test:e2e
