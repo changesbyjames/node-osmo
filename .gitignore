@@ -9,6 +9,10 @@ node_modules/
 # Coverage
 coverage
 
+# Playwright
+test-results/
+playwright-report/
+
 # Transpiled files
 dist/
 

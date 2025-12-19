@@ -14,6 +14,7 @@
     "README.md"
   ],
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@types/jest": "~29.5.14",
     "@types/node": "~20.16.15",
     "@typescript-eslint/eslint-plugin": "~7.6.0",
@@ -37,6 +38,7 @@
     "build:release": "npm run clean && tsc -p tsconfig.release.json",
     "lint": "eslint . --ext .ts --ext .mts",
     "test": "jest --coverage --passWithNoTests",
+    "test:e2e": "pnpm run build && playwright test",
     "prettier": "prettier --config .prettierrc --write .",
     "test:watch": "jest --watch --passWithNoTests"
   },
@@ -44,6 +46,7 @@
   "license": "MIT",
   "dependencies": {
     "@stoprocent/noble": "^1.18.2",
+    "@xstate/store": "^3.14.0",
     "bytebuf": "^1.2.0",
     "crc-full": "1.1.0",
     "node-osmo": "file:",
