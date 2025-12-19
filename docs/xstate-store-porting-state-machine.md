@@ -14,6 +14,10 @@ The current implementation in `src/device.ts` is already a **single state machin
 
 Important: `@xstate/store` is **not** XState machines/statecharts. It does not model states explicitly for you; you model them yourself in the `context` (e.g. `context.state = 'connecting'`). This still works well here because `device.ts` already uses a homegrown state enum.
 
+This guide uses **snake_case** for:
+- **state strings** (e.g. `checking_if_paired`)
+- **event names** (e.g. `start_requested`)
+
 ---
 
 ## Recommended architecture
@@ -45,15 +49,15 @@ Create a string union (or enum) mirroring `DjiDeviceState`:
 - `idle`
 - `discovering`
 - `connecting`
-- `checkingIfPaired`
+- `checking_if_paired`
 - `pairing`
-- `cleaningUp`
-- `preparingStream`
-- `settingUpWifi`
+- `cleaning_up`
+- `preparing_stream`
+- `setting_up_wifi`
 - `configuring`
-- `startingStream`
+- `starting_stream`
 - `streaming`
-- `stoppingStream`
+- `stopping_stream`
 
 Store context should include:
 - **state**: current state value
@@ -70,24 +74,24 @@ In `device.ts`, imperative methods are:
 - BLE lifecycle callbacks (stateChange, discover, characteristic data)
 
 In store form, these become events, for example:
-- `startRequested({ wifiSsid, wifiPassword, rtmpUrl, resolution, fps, bitrate, stabilization, model, deviceRef? })`
-- `stopRequested()`
-- `timerStartStreamingExpired()`
-- `timerStopStreamingExpired()`
-- `transportReady()` / `transportError({ error })`
+- `start_requested({ wifi_ssid, wifi_password, rtmp_url, resolution, fps, bitrate, image_stabilization, model, device_ref? })`
+- `stop_requested()`
+- `start_timeout_expired()`
+- `stop_timeout_expired()`
+- `transport_ready()` / `transport_error({ error })`
 - `connected()` / `disconnected()`
-- `characteristicsReady({ hasFff3, hasFff4, hasFff5, ... })`
+- `characteristics_ready({ has_fff3, has_fff4, has_fff5, ... })`
 - `notification({ characteristic: 'fff4' | 'fff5' | 'fff0' | 'fff3', data: Uint8Array })`
-- `messageReceived({ message: DjiMessage })` (recommended as the post-parse event)
+- `message_received({ message: DjiMessage })` (recommended as the post-parse event)
 
-You can keep both `notification` and `messageReceived` events:
+You can keep both `notification` and `message_received` events:
 - Transport emits `notification`.
-- Protocol parser listens and emits `messageReceived` once a full valid frame is assembled.
+- Protocol parser listens and emits `message_received` once a full valid frame is assembled.
 
 ### 3) Convert `setState(...)` into transitions
 `device.ts` calls `setState(DjiDeviceState.X)` in many places. In store form, transitions set `context.state = 'X'`.
 
-`@xstate/store` encourages you to update context in event transitions. For example, `startRequested` updates configuration and sets `state: 'discovering'`.
+`@xstate/store` encourages you to update context in event transitions. For example, `start_requested` updates configuration and sets `state: 'discovering'`.
 
 ### 4) Move side effects out of transitions
 Transition functions should stay pure. IO should happen in one of these patterns:
@@ -99,9 +103,9 @@ Transition functions should stay pure. IO should happen in one of these patterns
 Example edges:
 - `idle → discovering`: begin transport initialization and device selection.
 - `discovering → connecting`: connect and discover services/characteristics.
-- `connecting → checkingIfPaired`: write pair message.
-- `settingUpWifi → configuring`: write configure message.
-- `configuring → startingStream`: write start-stream message.
+- `connecting → checking_if_paired`: write pair message.
+- `setting_up_wifi → configuring`: write configure message.
+- `configuring → starting_stream`: write start-stream message.
 
 This is the closest match to the current state-machine style.
 
@@ -128,23 +132,23 @@ For this repo, **Pattern A is recommended**.
 ### Events
 Group them into:
 - **Public API events**
-  - `startRequested(...)`
-  - `stopRequested()`
-  - `setPairPinCode({ pinCode })`
+  - `start_requested(...)`
+  - `stop_requested()`
+  - `set_pair_pin_code({ pin_code })`
 
 - **Transport lifecycle events**
-  - `transportPoweredOn()` (node) / `deviceChosen({ device })` (web)
+  - `transport_powered_on()` (node) / `device_chosen({ device })` (web)
   - `connected()` / `disconnected()`
-  - `characteristicsDiscovered({ available: string[] })`
-  - `writeFailed({ error })`
+  - `characteristics_discovered({ available: string[] })`
+  - `write_failed({ error })`
 
 - **Data events**
-  - `bytesReceived({ from: 'fff4' | 'fff5' | ..., bytes })`
-  - `messageReceived({ message })`
+  - `bytes_received({ from: 'fff4' | 'fff5' | ..., bytes })`
+  - `message_received({ message })`
 
 - **Timer events**
-  - `startTimeoutExpired()`
-  - `stopTimeoutExpired()`
+  - `start_timeout_expired()`
+  - `stop_timeout_expired()`
 
 ---
 
@@ -152,33 +156,33 @@ Group them into:
 Below is the logic in `device.ts`, rewritten as store-driven rules.
 
 ### Bootstrapping / start
-- On `startRequested`:
+- On `start_requested`:
   - set config in context
   - set `state = 'discovering'`
   - start a “start timeout” (60s)
 
 **Effect runner** sees `state === 'discovering'`:
 - Web:
-  - if no `device` yet, trigger UI flow to choose device (or require `deviceChosen` before start).
+  - if no `device` yet, trigger UI flow to choose device (or require `device_chosen` before start).
   - once device chosen, connect.
 - Node:
   - start scanning and wait for matching device.
 
 ### Connecting and subscription
 - Once connected and characteristics subscribed:
-  - emit `connected` and `characteristicsDiscovered`
+  - emit `connected` and `characteristics_discovered`
   - set `state = 'connecting'`
 
 ### Pairing initiation (current behavior)
 Current logic: first time a value arrives on `fff4` while `connecting`, send pair message.
 
 In store form:
-- On `bytesReceived(from: 'fff4')` in `state === 'connecting'`:
-  - set `state = 'checkingIfPaired'`
+- On `bytes_received(from: 'fff4')` in `state === 'connecting'`:
+  - set `state = 'checking_if_paired'`
   - effect runner sends pair message immediately (or transition emits a “sendPair” command event).
 
 ### Checking if paired
-- On `messageReceived` when `state === 'checkingIfPaired'` and `message.id === pairTransactionId`:
+- On `message_received` when `state === 'checking_if_paired'` and `message.id === pairTransactionId`:
   - if payload `[0, 1]`: proceed to cleanup
   - else: set `state = 'pairing'`
 
@@ -188,46 +192,46 @@ Current logic: `processPairing()` immediately sends stop stream and moves to `cl
 In store form:
 - On entering `pairing` (or directly on the `checkingIfPaired` response):
   - effect runner sends stop-stream
-  - set `state = 'cleaningUp'`
+  - set `state = 'cleaning_up'`
 
 ### Preparing stream
-- On `messageReceived` in `cleaningUp` when `message.id === stopStreamingTransactionId`:
+- On `message_received` in `cleaning_up` when `message.id === stopStreamingTransactionId`:
   - send preparing-to-livestream message
-  - set `state = 'preparingStream'`
+  - set `state = 'preparing_stream'`
 
 ### Setting up Wi‑Fi
-- On `messageReceived` in `preparingStream` when `message.id === preparingToLivestreamTransactionId`:
+- On `message_received` in `preparing_stream` when `message.id === preparingToLivestreamTransactionId`:
   - send setup-wifi message
-  - set `state = 'settingUpWifi'`
+  - set `state = 'setting_up_wifi'`
 
 ### Configuring vs starting directly
-- On `messageReceived` in `settingUpWifi` when `message.id === setupWifiTransactionId`:
+- On `message_received` in `setting_up_wifi` when `message.id === setupWifiTransactionId`:
   - if model requires configure step: send configure and set `state = 'configuring'`
-  - else: send start-stream and set `state = 'startingStream'`
+  - else: send start-stream and set `state = 'starting_stream'`
 
 ### Starting stream
-- On entering `startingStream`:
+- On entering `starting_stream`:
   - send start-stream
   - OA5P: send confirm-start-stream payload
-- On `messageReceived` in `startingStream` when `message.id === startStreamingTransactionId`:
+- On `message_received` in `starting_stream` when `message.id === startStreamingTransactionId`:
   - set `state = 'streaming'`
   - stop “start timeout”
 
 ### Streaming updates
-- On `messageReceived` in `streaming`:
+- On `message_received` in `streaming`:
   - if battery message: update `batteryPercentage`
 
 ### Stop
-- On `stopRequested`:
+- On `stop_requested`:
   - stop “start timeout”
   - start “stop timeout” (10s)
   - send stop-stream
-  - set `state = 'stoppingStream'`
+  - set `state = 'stopping_stream'`
 
-- On `messageReceived` in `stoppingStream` when `message.id === stopStreamingTransactionId`:
+- On `message_received` in `stopping_stream` when `message.id === stopStreamingTransactionId`:
   - reset context and set `state = 'idle'`
 
-- On `stopTimeoutExpired`: force reset and set `state = 'idle'`
+- On `stop_timeout_expired`: force reset and set `state = 'idle'`
 
 ---
 
@@ -244,9 +248,9 @@ This avoids storing timer handles in context (which makes snapshots non-serializ
 
 ### Web Bluetooth
 - Device selection must come from user gesture. Recommended:
-  - UI calls `store.send({ type: 'startRequested', ... })`
+  - UI calls `store.send({ type: 'start_requested', ... })`
   - effect runner sees `state='discovering'` and requests a device if none exists
-  - when chosen, dispatch `deviceChosen({ device })`
+  - when chosen, dispatch `device_chosen({ device })`
 
 ### Node noble
 - Effect runner starts scanning and dispatches:
@@ -258,8 +262,8 @@ This avoids storing timer handles in context (which makes snapshots non-serializ
 
 ## Testing strategy
 - **Pure tests** (fast): feed the store a sequence of events and assert `context.state` transitions.
-- **Transport simulation**: use a mock transport that emits `bytesReceived` and captures writes.
-- **Parser tests**: validate that fragmented notification sequences yield correct `messageReceived` events.
+- **Transport simulation**: use a mock transport that emits `bytes_received` and captures writes.
+- **Parser tests**: validate that fragmented notification sequences yield correct `message_received` events.
 
 ---
 
@@ -271,4 +275,4 @@ This avoids storing timer handles in context (which makes snapshots non-serializ
   - calls the transport
 - A Web Bluetooth transport implementation.
 - A Node noble transport implementation (wrapping existing behavior).
-- A robust frame reassembly parser between `bytesReceived` and `messageReceived`.
+- A robust frame reassembly parser between `bytes_received` and `message_received`.
