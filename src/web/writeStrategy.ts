@@ -71,6 +71,11 @@ async function writeChunk(
   throw new Error('Transport does not support writing (no write methods)');
 }
 
+/**
+ * Writes a full DJI frame, optionally chunked/paced/retried.
+ *
+ * The transport only needs to support chunk writes; chunking/serialization is handled here.
+ */
 export async function writeMessage(
   writer: ChunkWriter,
   frame: Bytes,
